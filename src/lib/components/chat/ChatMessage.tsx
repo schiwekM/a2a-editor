@@ -1,5 +1,6 @@
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { ChatMessage as ChatMessageType } from "@lib/types/chat";
 import { isTextPart, isDataPart, isFilePart } from "@lib/types/a2a";
 import { cn } from "@lib/utils/cn";
@@ -202,7 +203,7 @@ export function ChatMessage({ message, onRetry }: ChatMessageProps) {
               <p className="text-sm whitespace-pre-wrap break-words">{fullText}</p>
             ) : (
               <div className="text-sm prose prose-sm dark:prose-invert max-w-none [word-break:break-word] [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_code]:break-all prose-p:my-1! prose-headings:my-2! prose-ul:my-1! prose-ol:my-1! prose-li:my-0! prose-pre:my-2! prose-code:bg-background/50! prose-code:px-1! prose-code:rounded! prose-code:before:content-none! prose-code:after:content-none!">
-                <ReactMarkdown components={{ code: CodeBlock, pre: PreBlock }}>{fullText}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: CodeBlock, pre: PreBlock }}>{fullText}</ReactMarkdown>
               </div>
             ))}
 

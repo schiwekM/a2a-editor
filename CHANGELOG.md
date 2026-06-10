@@ -10,6 +10,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 
 - Markdown rendering for agent card descriptions and skill card descriptions via ReactMarkdown
+- GFM (GitHub Flavored Markdown) support in chat via `remark-gfm` — tables, strikethrough, autolinks, task lists
 - Syntax highlighting for JSON, XML, and YAML code blocks in agent chat responses with copy buttons
 - Tag-based multi-select filtering on the Skills section (replaces text search input)
 - `mediaType`-aware text parts: structured content (XML, JSON, YAML) auto-rendered as highlighted code blocks
@@ -18,9 +19,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   - v0.3: lenient (extra properties allowed); v1.0: strict (`additionalProperties: false`)
   - Version-specific field hints in validation error messages
 - Zod-based compliance checks for JSON-RPC responses and streaming events (replaces hand-written structural checks)
+- `selectAgent(agentId)` method on standalone playground instance
 
 ### Fixed
 
+- **HITL:** Include `taskId` in outbound messages when replying to `input-required` tasks
+- **Connection URL/auth persistence:** Modified URL and credentials are persisted back to the predefined agent on connect; re-selecting the agent retains modifications (standalone/Docker included)
+- **Message auth:** Connection auth credentials (basic, bearer, API key) are now applied to A2A message requests
 - Registered `@tailwindcss/typography` plugin for Tailwind v4 (prose classes were silently ignored)
 - Agent card description uses CSS `line-clamp-3` instead of character-count truncation
 

@@ -149,6 +149,7 @@ interface ChatState {
   messages: ChatMessage[];
   isStreaming: boolean;
   currentTaskId: string | null;
+  currentTaskState: TaskState | null;
   contextId: string | null;
   inputText: string;
 
@@ -221,7 +222,8 @@ export const useChatStore = create<ChatState>((set, get) => {
       useHttpLogStore.getState().addLog(syntheticLog);
     } else {
       const version = useConnectionStore.getState().protocolVersion;
-      const outboundMessage = buildOutboundMessage(parts, version, messageId, get().contextId);
+      const taskIdForReply = get().currentTaskState === "input-required" ? get().currentTaskId : null;
+      const outboundMessage = buildOutboundMessage(parts, version, messageId, get().contextId, taskIdForReply);
       const configuration = buildOutboundConfiguration(version);
       const rpcRequest: Record<string, unknown> = {
         jsonrpc: "2.0",
@@ -265,8 +267,23 @@ export const useChatStore = create<ChatState>((set, get) => {
       set((s) => ({
         messages: appendMessage(s.messages, agentMessage),
         currentTaskId: result.taskId,
+        currentTaskState: result.status ?? null,
         contextId: result.contextId,
       }));
+    } else {
+      // Even when processJsonRpcResponse returns null (e.g. no message parts),
+      // extract taskId and contextId from the raw response so subsequent messages
+      // can reference the task (critical for HITL / input-required flows).
+      const rawResult = (data as Record<string, unknown>)?.result as Record<string, unknown> | undefined;
+      if (rawResult) {
+        // Task responses use "id", Message responses use "taskId"
+        const taskId = (rawResult.id ?? rawResult.taskId ?? "") as string;
+        const contextId = (rawResult.contextId ?? "") as string;
+        const state = (rawResult.status as Record<string, unknown>)?.state as TaskState | undefined;
+        if (taskId) {
+          set({ currentTaskId: taskId, currentTaskState: state ?? null, contextId: contextId || get().contextId });
+        }
+      }
     }
   }
 
@@ -299,7 +316,8 @@ export const useChatStore = create<ChatState>((set, get) => {
     }));
 
     // Build JSON-RPC request
-    const outboundMessage = buildOutboundMessage(parts, version, messageId, get().contextId);
+    const taskIdForReply = get().currentTaskState === "input-required" ? get().currentTaskId : null;
+    const outboundMessage = buildOutboundMessage(parts, version, messageId, get().contextId, taskIdForReply);
     const configuration = buildOutboundConfiguration(version);
     const rpcRequest: Record<string, unknown> = {
       jsonrpc: "2.0",
@@ -351,8 +369,8 @@ export const useChatStore = create<ChatState>((set, get) => {
               updated.parts = isTerminal ? status.message.parts : [...msg.parts, ...status.message.parts];
             }
             return updated;
-          });
-          set({ currentTaskId: taskId, contextId });
+           });
+          set({ currentTaskId: taskId, currentTaskState: status.state, contextId });
         },
 
         onArtifactUpdate(taskId, contextId, artifact) {
@@ -411,7 +429,16 @@ export const useChatStore = create<ChatState>((set, get) => {
           }));
 
           if (result) {
-            set({ currentTaskId: result.taskId, contextId: result.contextId });
+            set({ currentTaskId: result.taskId, currentTaskState: result.status ?? null, contextId: result.contextId });
+          } else {
+            // Extract taskId from raw task even when no message parts
+            const rawTask = task as Record<string, unknown> | undefined;
+            const taskId = (rawTask?.id ?? "") as string;
+            const contextId = (rawTask?.contextId ?? "") as string;
+            const state = (rawTask?.status as Record<string, unknown>)?.state as TaskState | undefined;
+            if (taskId) {
+              set({ currentTaskId: taskId, currentTaskState: state ?? null, contextId: contextId || get().contextId });
+            }
           }
         },
 
@@ -529,6 +556,7 @@ export const useChatStore = create<ChatState>((set, get) => {
     messages: [],
     isStreaming: false,
     currentTaskId: null,
+    currentTaskState: null,
     contextId: null,
     inputText: "",
 
@@ -687,6 +715,7 @@ export const useChatStore = create<ChatState>((set, get) => {
             set((s) => ({
               messages: appendMessage(s.messages, agentMessage),
               currentTaskId: result.taskId,
+              currentTaskState: result.status ?? null,
               contextId: result.contextId,
             }));
           }
@@ -723,6 +752,7 @@ export const useChatStore = create<ChatState>((set, get) => {
       set({
         messages: [],
         currentTaskId: null,
+        currentTaskState: null,
         contextId: null,
         inputText: "",
         isStreaming: false,

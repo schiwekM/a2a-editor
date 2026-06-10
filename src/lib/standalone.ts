@@ -27,6 +27,7 @@ import { useUIStore } from "./stores/uiStore";
 import { usePredefinedAgentsStore } from "./stores/predefinedAgentsStore";
 import { useChatStore } from "./stores/chatStore";
 import { useHttpLogStore } from "./stores/httpLogStore";
+import { selectPredefinedAgent } from "./utils/agent-selection";
 import type { AgentCard, Part } from "./types/a2a";
 import type { ValidationResult } from "./types/validation";
 import type { AuthType } from "./types/connection";
@@ -136,6 +137,9 @@ export interface A2APlaygroundInstance {
 
   /** Connect to an agent URL */
   connect(url: string): Promise<AgentCard>;
+
+  /** Select a predefined agent by ID (uses stored/updated URL) */
+  selectAgent(agentId: string): Promise<AgentCard | null>;
 
   /** Disconnect from current agent */
   disconnect(): void;
@@ -411,6 +415,17 @@ function createInstance(element: HTMLElement, options: A2APlaygroundOptions): A2
 
     disconnect() {
       useConnectionStore.getState().disconnect();
+    },
+
+    async selectAgent(agentId: string) {
+      const store = usePredefinedAgentsStore.getState();
+      if (store.agents.length === 0) {
+        await store.loadDefaults();
+      }
+      const agent = usePredefinedAgentsStore.getState().agents.find((a) => a.id === agentId);
+      if (!agent) throw new Error(`Agent "${agentId}" not found`);
+      await selectPredefinedAgent(agent);
+      return useAgentCardStore.getState().parsedCard;
     },
 
     async validate() {

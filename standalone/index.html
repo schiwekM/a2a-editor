@@ -707,10 +707,10 @@
         card.classList.add("selected");
         selectedId = agent.id;
 
-        // Connect playground to agent
+        // Connect playground to agent (uses stored/updated URL from predefined agents store)
         if (playground) {
           playground
-            .connect(agent.url)
+            .selectAgent(agent.id)
             .then(() => {
               // Switch to card/overview view after successful connection
               playground.setActiveTab("overview");

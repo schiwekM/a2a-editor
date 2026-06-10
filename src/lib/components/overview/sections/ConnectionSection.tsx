@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useConnectionStore } from "@lib/stores/connectionStore";
 import { useAgentCardStore } from "@lib/stores/agentCardStore";
+import { usePredefinedAgentsStore } from "@lib/stores/predefinedAgentsStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@lib/components/ui/card";
 import { Input } from "@lib/components/ui/input";
 import { PasswordInput } from "@lib/components/ui/PasswordInput";
@@ -61,8 +62,52 @@ export function ConnectionSection() {
     const headers = buildConnHeaders(connAuthType, localUsername, localPassword, localToken, localApiKey, storeApiKeyCreds.headerName);
     const result = await connect(Object.keys(headers).length > 0 ? headers : undefined);
     if (result) {
+      // Persist connection auth credentials to the connection store BEFORE
+      // autoConfigureAuth so that when it recomputes authHeaders, it uses
+      // the user-entered credentials (e.g. basic auth for A2A messages).
+      const connStore = useConnectionStore.getState();
+      if (connAuthType !== "none") {
+        const storeAuthType = (connAuthType === "bearer" ? "oauth2" : connAuthType) as "basic" | "oauth2" | "apiKey";
+        // Set both connectionAuthType and authType so credentials are used for
+        // card fetching AND A2A messages (autoConfigureAuth may override authType
+        // if the card declares a different security scheme).
+        useConnectionStore.setState({ connectionAuthType: storeAuthType });
+        connStore.setAuthType(storeAuthType);
+      }
+      switch (connAuthType) {
+        case "basic":
+          connStore.setBasicCredentials({ username: localUsername, password: localPassword });
+          break;
+        case "bearer":
+          connStore.setOAuth2Credentials({ accessToken: localToken });
+          break;
+        case "apiKey":
+          connStore.setApiKeyCredentials({ key: localApiKey });
+          break;
+      }
+
       setRawJson(result.rawJson);
       autoConfigureAuth(result.card);
+
+      // Persist modified URL and auth back to selected predefined agent
+      const { selectedId, updateAgent } = usePredefinedAgentsStore.getState();
+      if (selectedId) {
+        const currentUrl = useConnectionStore.getState().url;
+        const updatedConnStore = useConnectionStore.getState();
+        const updates: Record<string, unknown> = {
+          url: currentUrl,
+          authType: updatedConnStore.authType,
+          authConfig: buildStoredAuthConfig(updatedConnStore.authType, updatedConnStore.basicCredentials, updatedConnStore.oauth2Credentials, updatedConnStore.apiKeyCredentials),
+        };
+        if (connAuthType !== "none") {
+          updates.connectionAuthType = connAuthType === "bearer" ? "oauth2" : connAuthType;
+          updates.connectionAuthConfig = buildStoredConnAuthConfig(connAuthType, localUsername, localPassword, localToken, localApiKey, storeApiKeyCreds.headerName);
+        } else {
+          updates.connectionAuthType = undefined;
+          updates.connectionAuthConfig = undefined;
+        }
+        updateAgent(selectedId, updates);
+      }
     }
   }, [connAuthType, localUsername, localPassword, localToken, localApiKey, storeApiKeyCreds.headerName, connect, setRawJson, autoConfigureAuth]);
 
@@ -194,4 +239,44 @@ export function ConnectionSection() {
       </CardContent>
     </Card>
   );
+}
+
+/** Build auth config object for persisting connection auth (card fetching) to predefined agent. */
+function buildStoredConnAuthConfig(
+  authType: ConnAuthType,
+  username: string,
+  password: string,
+  token: string,
+  apiKey: string,
+  headerName: string,
+): Record<string, string> | undefined {
+  switch (authType) {
+    case "basic":
+      return { username, password };
+    case "bearer":
+      return { accessToken: token, clientId: "", clientSecret: "", tokenUrl: "", scopes: "" };
+    case "apiKey":
+      return { key: apiKey, headerName };
+    default:
+      return undefined;
+  }
+}
+
+/** Build auth config object for persisting A2A message auth to predefined agent. */
+function buildStoredAuthConfig(
+  authType: string,
+  basicCredentials: { username: string; password: string },
+  oauth2Credentials: { clientId: string; clientSecret: string; tokenUrl: string; scopes: string; accessToken?: string },
+  apiKeyCredentials: { key: string; headerName: string },
+): Record<string, string> | undefined {
+  switch (authType) {
+    case "basic":
+      return { ...basicCredentials };
+    case "oauth2":
+      return { ...oauth2Credentials };
+    case "apiKey":
+      return { ...apiKeyCredentials };
+    default:
+      return undefined;
+  }
 }

@@ -550,6 +550,7 @@ export function buildOutboundMessage(
   version: string,
   messageId: string,
   contextId?: string | null,
+  taskId?: string | null,
 ): Record<string, unknown> {
   const message: Record<string, unknown> = {
     role: buildOutboundRole(version),
@@ -558,6 +559,9 @@ export function buildOutboundMessage(
   };
   if (contextId) {
     message.contextId = contextId;
+  }
+  if (taskId) {
+    message.taskId = taskId;
   }
   return message;
 }

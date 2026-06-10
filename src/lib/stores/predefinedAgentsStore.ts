@@ -10,6 +10,7 @@ interface PredefinedAgentsState {
   loadDefaults: () => Promise<void>;
   loadFromOrd: (url: string, headers?: Record<string, string>) => Promise<number>;
   addCustomAgent: (agent: PredefinedAgent) => void;
+  updateAgent: (id: string, updates: Partial<Pick<PredefinedAgent, "url" | "authType" | "authConfig" | "connectionAuthType" | "connectionAuthConfig">>) => void;
   removeAgent: (id: string) => void;
   select: (id: string) => void;
   deselect: () => void;
@@ -108,6 +109,15 @@ export const usePredefinedAgentsStore = create<PredefinedAgentsState>(
         }
         const newAgents = [...state.agents, agent];
         persistCustom(newAgents);
+        return { agents: newAgents };
+      });
+    },
+
+    updateAgent: (id, updates) => {
+      set((state) => {
+        const newAgents = state.agents.map((a) => (a.id === id ? { ...a, ...updates } : a));
+        persistCustom(newAgents);
+        persistOrd(newAgents);
         return { agents: newAgents };
       });
     },
