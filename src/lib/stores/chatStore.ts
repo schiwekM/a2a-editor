@@ -11,6 +11,7 @@ import {
   normalizeTaskResponse,
   getJsonRpcMethod,
   getStreamingJsonRpcMethod,
+  getCancelJsonRpcMethod,
   buildOutboundMessage,
   buildOutboundHeaders,
   buildOutboundConfiguration,
@@ -81,6 +82,7 @@ async function fetchWithLogging(
   requestBody: string,
   chatMessageId: string,
   derivedFromLogId?: string,
+  signal?: AbortSignal,
 ): Promise<unknown> {
   const logId = uuidv4();
   const startTime = Date.now();
@@ -106,6 +108,7 @@ async function fetchWithLogging(
       method: "POST",
       headers: requestHeaders,
       body: requestBody,
+      signal,
     });
 
     const responseBody = await res.text();
@@ -181,6 +184,8 @@ export const useChatStore = create<ChatState>((set, get) => {
     authHeaders: Record<string, string>,
     messageId: string,
   ) {
+    const abortController = new AbortController();
+    activeAbortController = abortController;
     let data: unknown;
 
     // Handle mock agents client-side
@@ -241,7 +246,7 @@ export const useChatStore = create<ChatState>((set, get) => {
         ...authHeaders,
       };
 
-      data = await fetchWithLogging(agentUrl, requestHeaders, JSON.stringify(rpcRequest), messageId);
+      data = await fetchWithLogging(agentUrl, requestHeaders, JSON.stringify(rpcRequest), messageId, undefined, abortController.signal);
     }
 
     // Normalize wire response to internal format before processing
@@ -284,6 +289,11 @@ export const useChatStore = create<ChatState>((set, get) => {
           set({ currentTaskId: taskId, currentTaskState: state ?? null, contextId: contextId || get().contextId });
         }
       }
+    }
+
+    // Clean up abort controller
+    if (activeAbortController === abortController) {
+      activeAbortController = null;
     }
   }
 
@@ -443,6 +453,15 @@ export const useChatStore = create<ChatState>((set, get) => {
         },
 
         onError(error) {
+          // Ignore abort errors — handled by cancelStream flow
+          if (abortController.signal.aborted) {
+            updateMessage(agentMsgId, (msg) => ({
+              ...msg,
+              isStreaming: false,
+              status: "canceled" as TaskState,
+            }));
+            return;
+          }
           updateMessage(agentMsgId, (msg) => ({
             ...msg,
             status: "failed" as TaskState,
@@ -593,6 +612,11 @@ export const useChatStore = create<ChatState>((set, get) => {
           await sendNonStreaming(parts, agentUrl, authHeaders, messageId);
         }
       } catch (err) {
+        // Don't show error if user canceled the request
+        if (err instanceof DOMException && err.name === "AbortError") {
+          return;
+        }
+
         const errorMessage: ChatMessage = {
           id: uuidv4(),
           role: "agent",
@@ -741,11 +765,33 @@ export const useChatStore = create<ChatState>((set, get) => {
     },
 
     cancelStream: () => {
+      const taskId = get().currentTaskId;
+
+      // Send tasks/cancel RPC to agent (fire-and-forget, logged)
+      if (taskId) {
+        const connStore = useConnectionStore.getState();
+        const version = connStore.protocolVersion;
+        const agentUrl = connStore.messagingUrl || connStore.url;
+        const rpcRequest = {
+          jsonrpc: "2.0",
+          id: uuidv4(),
+          method: getCancelJsonRpcMethod(version),
+          params: { id: taskId },
+        };
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+          ...buildOutboundHeaders(version),
+          ...connStore.authHeaders,
+        };
+        fetchWithLogging(agentUrl, headers, JSON.stringify(rpcRequest), "cancel-" + taskId)
+          .catch(() => {});
+      }
+
+      // Abort the active stream/fetch
       if (activeAbortController) {
         activeAbortController.abort();
         activeAbortController = null;
       }
-      // The abort handler in sendStreaming will update the message status
     },
 
     clearChat: () =>

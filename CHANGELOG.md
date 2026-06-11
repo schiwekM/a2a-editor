@@ -20,12 +20,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   - Version-specific field hints in validation error messages
 - Zod-based compliance checks for JSON-RPC responses and streaming events (replaces hand-written structural checks)
 - `selectAgent(agentId)` method on standalone playground instance
+- Task cancellation via A2A `tasks/cancel` (v0.3) / `CancelTask` (v1.0) RPC when pressing the stop button
 
 ### Fixed
 
 - **HITL:** Include `taskId` in outbound messages when replying to `input-required` tasks
 - **Connection URL/auth persistence:** Modified URL and credentials are persisted back to the predefined agent on connect; re-selecting the agent retains modifications (standalone/Docker included)
 - **Message auth:** Connection auth credentials (basic, bearer, API key) are now applied to A2A message requests
+- **Cancel:** Stop button no longer shows "bodyStreamBuffer was aborted" error; sends cancel RPC to agent and cleanly sets message status to canceled
 - Registered `@tailwindcss/typography` plugin for Tailwind v4 (prose classes were silently ignored)
 - Agent card description uses CSS `line-clamp-3` instead of character-count truncation
 

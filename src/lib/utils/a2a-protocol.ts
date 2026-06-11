@@ -491,6 +491,11 @@ export function getStreamingJsonRpcMethod(version: string): string {
   return isV1(version) ? "SendStreamingMessage" : "message/stream";
 }
 
+/** Get the correct JSON-RPC method name for task cancellation. */
+export function getCancelJsonRpcMethod(version: string): string {
+  return isV1(version) ? "CancelTask" : "tasks/cancel";
+}
+
 // ===================================================================
 // Outbound: Message Building
 // ===================================================================
