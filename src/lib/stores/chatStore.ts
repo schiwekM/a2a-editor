@@ -227,7 +227,10 @@ export const useChatStore = create<ChatState>((set, get) => {
       useHttpLogStore.getState().addLog(syntheticLog);
     } else {
       const version = useConnectionStore.getState().protocolVersion;
-      const taskIdForReply = get().currentTaskState === "input-required" ? get().currentTaskId : null;
+      const lastAgentMsg = [...get().messages].reverse().find((m) => m.role === "agent");
+      const taskIdForReply = lastAgentMsg?.status === "input-required" && lastAgentMsg?.taskId
+        ? lastAgentMsg.taskId
+        : null;
       const outboundMessage = buildOutboundMessage(parts, version, messageId, get().contextId, taskIdForReply);
       const configuration = buildOutboundConfiguration(version);
       const rpcRequest: Record<string, unknown> = {
@@ -326,7 +329,10 @@ export const useChatStore = create<ChatState>((set, get) => {
     }));
 
     // Build JSON-RPC request
-    const taskIdForReply = get().currentTaskState === "input-required" ? get().currentTaskId : null;
+    const lastAgentMsg = [...get().messages].reverse().find((m) => m.role === "agent");
+    const taskIdForReply = lastAgentMsg?.status === "input-required" && lastAgentMsg?.taskId
+      ? lastAgentMsg.taskId
+      : null;
     const outboundMessage = buildOutboundMessage(parts, version, messageId, get().contextId, taskIdForReply);
     const configuration = buildOutboundConfiguration(version);
     const rpcRequest: Record<string, unknown> = {
